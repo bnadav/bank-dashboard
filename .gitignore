@@ -1,8 +1,10 @@
-# Excel data files (sensitive)
+# Excel data files (sensitive — real bank exports)
 *.xlsx
+!demo_*.xlsx
 
 # Generated HTML dashboards (sensitive output)
 dashboard*.html
+# docs/ is NOT excluded — committed for GitHub Pages
 
 # Python cache
 __pycache__/

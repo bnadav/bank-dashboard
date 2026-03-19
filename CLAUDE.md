@@ -24,6 +24,22 @@ python bank_dashboard.py 02_2026_6138.xlsx 02_2026_8689.xlsx
 **Dependency:** `pip install openpyxl`
 **Requirement:** Internet access to load Chart.js from CDN when opening the HTML dashboard.
 
+## Demo & GitHub Pages
+
+A public demo with fake-but-realistic data is hosted at **https://bnadav.github.io/bank-dashboard/**.
+
+To regenerate the demo (e.g. after changing categories, styling, or JS):
+
+```bash
+python generate_demo.py
+```
+
+This creates:
+- `demo_01_2026.xlsx`, `demo_02_2026.xlsx`, `demo_03_2026.xlsx` — fake bank exports covering all categories
+- `docs/index.html` — the self-contained dashboard (committed to repo, served by GitHub Pages)
+
+GitHub Pages is configured to serve from the `master` branch `/docs` folder. After pushing, the site updates automatically — no CI needed.
+
 ## File naming convention
 
 - Raw exports from the bank: any `.xlsx` name (auto-discovered)
