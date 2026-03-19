@@ -444,7 +444,6 @@ def build_month_panel(txns: list, month: int, year: int, suffix: str) -> tuple:
             f'<td>{badge(t["category"], cat_order)}</td>'
             f'<td style="text-align:left">{ils_cell(t["charge"])}</td>'
             f'<td style="font-family:monospace;color:#888;font-size:.8rem">···· {t["card"]}</td>'
-            f'<td style="color:#aaa;font-size:.78rem">{t["type"]}</td>'
             f'</tr>'
         )
 
@@ -493,7 +492,7 @@ def build_month_panel(txns: list, month: int, year: int, suffix: str) -> tuple:
   </div>
   <table id="catDetailTable_{suffix}">
     <thead><tr>
-      <th>תאריך</th><th>בית עסק</th><th>קטגוריה</th><th>סכום</th><th>כרטיס</th><th>סוג עסקה</th>
+      <th>תאריך</th><th>בית עסק</th><th>קטגוריה</th><th>סכום</th><th>כרטיס</th>
     </tr></thead>
     <tbody></tbody>
   </table>
@@ -515,7 +514,7 @@ def build_month_panel(txns: list, month: int, year: int, suffix: str) -> tuple:
   </div>
   <table id="allTable_{suffix}">
     <thead><tr>
-      <th>תאריך</th><th>בית עסק</th><th>קטגוריה</th><th>סכום</th><th>כרטיס</th><th>סוג עסקה</th>
+      <th>תאריך</th><th>בית עסק</th><th>קטגוריה</th><th>סכום</th><th>כרטיס</th>
     </tr></thead>
     <tbody>{all_rows_html}</tbody>
   </table>
