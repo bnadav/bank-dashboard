@@ -1,0 +1,10 @@
+# Excel data files (sensitive)
+*.xlsx
+
+# Generated HTML dashboards (sensitive output)
+dashboard_*.html
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
