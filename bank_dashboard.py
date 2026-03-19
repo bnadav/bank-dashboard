@@ -240,6 +240,25 @@ function initMonth_%%SUFFIX%%() {
     data: { labels: L, datasets: [{ data: V, backgroundColor: C, borderRadius: 4, borderSkipped: false }] },
     options: {
       indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+      onClick: function(evt, elements) {
+        var panel = document.getElementById('catDetail_%%SUFFIX%%');
+        if (!elements.length) { panel.style.display='none'; panel.dataset.cat=''; return; }
+        var idx = elements[0].index;
+        var cat = L[idx], val = V[idx];
+        if (panel.dataset.cat === cat && panel.style.display !== 'none') {
+          panel.style.display='none'; panel.dataset.cat=''; return;
+        }
+        panel.dataset.cat = cat;
+        document.getElementById('catDetailTitle_%%SUFFIX%%').textContent =
+          cat + ' \u2014 ' + val.toLocaleString('he-IL', {minimumFractionDigits:2}) + ' \u20aa';
+        var tbody = document.querySelector('#catDetailTable_%%SUFFIX%% tbody');
+        tbody.innerHTML = '';
+        document.querySelectorAll('#allTable_%%SUFFIX%% tbody tr').forEach(function(r) {
+          if (r.dataset.category === cat) tbody.appendChild(r.cloneNode(true));
+        });
+        panel.style.display = 'block';
+        panel.scrollIntoView({behavior:'smooth', block:'nearest'});
+      },
       plugins: {
         legend: { display: false },
         tooltip: { callbacks: { label: ctx => ' ' + ctx.parsed.x.toLocaleString('he-IL', {minimumFractionDigits:2}) + ' \u20aa' } }
@@ -418,7 +437,7 @@ def build_month_panel(txns: list, month: int, year: int, suffix: str) -> tuple:
     all_rows_html = ''
     for t in all_sorted:
         all_rows_html += (
-            f'<tr data-card="{t["card"]}">'
+            f'<tr data-card="{t["card"]}" data-category="{t["category"]}">'
             f'<td style="white-space:nowrap">{fdate(t["date"])}</td>'
             f'<td style="font-weight:500">{"🌍 " if t["foreign"] else ""}{t["merchant"]}</td>'
             f'<td>{badge(t["category"], cat_order)}</td>'
@@ -461,9 +480,22 @@ def build_month_panel(txns: list, month: int, year: int, suffix: str) -> tuple:
     <div class="chart-wrap"><canvas id="pieChart_{suffix}"></canvas></div>
   </div>
   <div class="chart-card">
-    <h2>סכום לפי קטגוריה (&#x20AA;)</h2>
+    <h2>סכום לפי קטגוריה (&#x20AA;) &nbsp;<span style="font-size:.75rem;font-weight:400;color:#aaa">לחץ על עמודה לפירוט</span></h2>
     <div class="chart-wrap"><canvas id="barChart_{suffix}"></canvas></div>
   </div>
+</div>
+<div id="catDetail_{suffix}" class="section" style="display:none;border-top:3px solid #4361EE">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+    <h2 id="catDetailTitle_{suffix}" style="font-size:.95rem;font-weight:600;color:#555"></h2>
+    <button onclick="var p=document.getElementById('catDetail_{suffix}');p.style.display='none';p.dataset.cat='';"
+            style="border:none;background:none;font-size:1.2rem;cursor:pointer;color:#aaa;padding:4px 8px;line-height:1">✕</button>
+  </div>
+  <table id="catDetailTable_{suffix}">
+    <thead><tr>
+      <th>תאריך</th><th>בית עסק</th><th>קטגוריה</th><th>סכום</th><th>כרטיס</th><th>סוג עסקה</th>
+    </tr></thead>
+    <tbody></tbody>
+  </table>
 </div>
 <div class="section">
   <h2>10 ההוצאות הגבוהות ביותר</h2>
