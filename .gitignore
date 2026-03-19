@@ -2,7 +2,7 @@
 *.xlsx
 
 # Generated HTML dashboards (sensitive output)
-dashboard_*.html
+dashboard*.html
 
 # Python cache
 __pycache__/

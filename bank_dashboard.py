@@ -209,18 +209,125 @@ def process_file(path: str) -> tuple:
 
 def discover_files(cli_args: list) -> list:
     if cli_args:
-        # Explicit files: use as-is, no filtering
         return cli_args
-    # Auto-discovery: skip already-renamed files
-    candidates = _glob.glob('*.xlsx')
-    files   = [f for f in candidates if not RENAMED_RE.match(os.path.basename(f))]
-    skipped = [f for f in candidates if RENAMED_RE.match(os.path.basename(f))]
-    for f in skipped:
-        print(f'Skipping already-renamed file: {f}')
-    return files
+    # Include all xlsx files — new and previously renamed
+    return _glob.glob('*.xlsx')
 
 
 # ── HTML generation ───────────────────────────────────────────────────────────
+
+# Per-month JS template — %%SUFFIX%%, %%LABELS%%, %%VALUES%%, %%COLORS%% are replaced at runtime.
+# Written as a plain string (no f-string) so JS braces are literal.
+_MONTH_JS = """\
+var _init_%%SUFFIX%% = false;
+function initMonth_%%SUFFIX%%() {
+  if (_init_%%SUFFIX%%) return;
+  _init_%%SUFFIX%% = true;
+  var L = %%LABELS%%, V = %%VALUES%%, C = %%COLORS%%;
+  new Chart(document.getElementById('pieChart_%%SUFFIX%%'), {
+    type: 'doughnut',
+    data: { labels: L, datasets: [{ data: V, backgroundColor: C, borderWidth: 2, borderColor: '#fff' }] },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'right', rtl: true, labels: { boxWidth: 12, padding: 10, font: { size: 11 } } },
+        tooltip: { callbacks: { label: ctx => ' ' + ctx.label + ': ' + ctx.parsed.toLocaleString('he-IL', {minimumFractionDigits:2}) + ' \u20aa' } }
+      }
+    }
+  });
+  new Chart(document.getElementById('barChart_%%SUFFIX%%'), {
+    type: 'bar',
+    data: { labels: L, datasets: [{ data: V, backgroundColor: C, borderRadius: 4, borderSkipped: false }] },
+    options: {
+      indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: ctx => ' ' + ctx.parsed.x.toLocaleString('he-IL', {minimumFractionDigits:2}) + ' \u20aa' } }
+      },
+      scales: {
+        x: { ticks: { callback: v => v.toLocaleString('he-IL') + '\u20aa' }, grid: { color: '#f0f0f0' } },
+        y: { ticks: { font: { size: 11 } }, grid: { display: false } }
+      }
+    }
+  });
+  document.querySelectorAll('#panel_%%SUFFIX%% .fbtn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      document.querySelectorAll('#panel_%%SUFFIX%% .fbtn').forEach(function(b) { b.classList.remove('active'); });
+      btn.classList.add('active');
+      applyFilters_%%SUFFIX%%();
+    });
+  });
+  function applyFilters_%%SUFFIX%%() {
+    var card = document.querySelector('#panel_%%SUFFIX%% .fbtn.active').dataset.card;
+    var q = document.getElementById('searchBox_%%SUFFIX%%').value.toLowerCase();
+    document.querySelectorAll('#allTable_%%SUFFIX%% tbody tr').forEach(function(row) {
+      var ok = (card === 'all' || row.dataset.card === card) &&
+               (!q || row.cells[1].textContent.toLowerCase().includes(q));
+      row.style.display = ok ? '' : 'none';
+    });
+  }
+  document.getElementById('searchBox_%%SUFFIX%%').addEventListener('input', applyFilters_%%SUFFIX%%);
+  makeTableSortable('top10Table_%%SUFFIX%%');
+  makeTableSortable('allTable_%%SUFFIX%%');
+}
+"""
+
+_SHARED_JS = """\
+Chart.defaults.font.family = "'Segoe UI', Arial, sans-serif";
+Chart.defaults.font.size = 12;
+
+function parseCellValue(text) {
+  if (/^#[0-9]+$/.test(text)) return parseInt(text.slice(1));
+  if (/^[0-9]{2}[/][0-9]{2}[/][0-9]{4}$/.test(text)) {
+    var p = text.split('/'); return parseInt(p[2] + p[1] + p[0]);
+  }
+  var n = parseFloat(text.replace(/[\u20aa,+ \\t\u00b7\u200f\u200e]/g, ''));
+  return isNaN(n) ? text : n;
+}
+
+function makeTableSortable(tableId) {
+  var table = document.getElementById(tableId);
+  if (!table) return;
+  var ths = Array.from(table.querySelectorAll('thead th'));
+  var curCol = -1, curAsc = true;
+  ths.forEach(function(th, idx) {
+    var arrow = document.createElement('span');
+    arrow.style.cssText = 'margin-right:6px;font-size:.65rem;opacity:.3;vertical-align:middle;';
+    arrow.textContent = '\u21c5';
+    th.appendChild(arrow);
+    th.style.cursor = 'pointer'; th.style.userSelect = 'none'; th.title = '\u05dc\u05d7\u05e5 \u05dc\u05de\u05d9\u05d5\u05df';
+    th.addEventListener('click', function() {
+      if (curCol === idx) curAsc = !curAsc; else { curCol = idx; curAsc = true; }
+      ths.forEach(function(h, i) {
+        var a = h.querySelector('span'); if (!a) return;
+        if (i === idx) { a.textContent = curAsc ? ' \u25b2' : ' \u25bc'; a.style.opacity='1'; a.style.color='#4361EE'; }
+        else           { a.textContent = '\u21c5'; a.style.opacity='.3'; a.style.color=''; }
+      });
+      var tbody = table.querySelector('tbody');
+      var rows = Array.from(tbody.querySelectorAll('tr'));
+      rows.sort(function(a, b) {
+        var av = parseCellValue(a.cells[idx] ? a.cells[idx].textContent.trim() : '');
+        var bv = parseCellValue(b.cells[idx] ? b.cells[idx].textContent.trim() : '');
+        if (typeof av === 'number' && typeof bv === 'number') return curAsc ? av-bv : bv-av;
+        return curAsc ? String(av).localeCompare(String(bv),'he') : String(bv).localeCompare(String(av),'he');
+      });
+      rows.forEach(function(r) { tbody.appendChild(r); });
+    });
+  });
+}
+
+document.querySelectorAll('.tab').forEach(function(btn) {
+  btn.addEventListener('click', function() {
+    document.querySelectorAll('.tab').forEach(function(b) { b.classList.remove('active'); });
+    btn.classList.add('active');
+    document.querySelectorAll('.month-panel').forEach(function(p) { p.classList.remove('active'); });
+    var s = btn.dataset.suffix;
+    document.getElementById('panel_' + s).classList.add('active');
+    window['initMonth_' + s]();
+  });
+});
+"""
+
 
 def cat_color(cat: str, cat_order: list) -> str:
     idx = next((i for i, (n, _) in enumerate(cat_order) if n == cat), 0)
@@ -244,7 +351,8 @@ def fdate(d: datetime) -> str:
     return d.strftime('%d/%m/%Y')
 
 
-def build_html(txns: list, month: int, year: int) -> str:
+def build_month_panel(txns: list, month: int, year: int, suffix: str) -> tuple:
+    """Returns (inner_html: str, init_js: str) for one month tab panel."""
     charges    = [t for t in txns if t['charge'] > 0]
     credits    = [t for t in txns if t['charge'] < 0]
     total_chg  = sum(t['charge'] for t in charges)
@@ -320,203 +428,116 @@ def build_html(txns: list, month: int, year: int) -> str:
             f'</tr>'
         )
 
-    # ── Chart data (as JS constants, injected safely) ──
+    # Build chart init JS via template substitution (no f-string → braces are literal)
     chart_labels = json.dumps([n for n, _ in cat_order], ensure_ascii=False)
     chart_values = json.dumps([round(v, 2) for _, v in cat_order])
     chart_colors = json.dumps([PALETTE[i % len(PALETTE)] for i in range(len(cat_order))])
-
-    # ── JS block (plain string, no f-string — so {} are literal) ──
-    js_block = (
-        "const chartLabels = " + chart_labels + ";\n"
-        "const chartValues = " + chart_values + ";\n"
-        "const chartColors = " + chart_colors + ";\n"
-        """
-Chart.defaults.font.family = "'Segoe UI', Arial, sans-serif";
-Chart.defaults.font.size = 12;
-
-new Chart(document.getElementById('pieChart'), {
-  type: 'doughnut',
-  data: {
-    labels: chartLabels,
-    datasets: [{
-      data: chartValues,
-      backgroundColor: chartColors,
-      borderWidth: 2,
-      borderColor: '#fff'
-    }]
-  },
-  options: {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-      legend: {
-        position: 'right',
-        rtl: true,
-        labels: { boxWidth: 12, padding: 10, font: { size: 11 } }
-      },
-      tooltip: {
-        callbacks: {
-          label: ctx => ' ' + ctx.label + ': ' + ctx.parsed.toLocaleString('he-IL', {minimumFractionDigits:2}) + ' ₪'
-        }
-      }
-    }
-  }
-});
-
-new Chart(document.getElementById('barChart'), {
-  type: 'bar',
-  data: {
-    labels: chartLabels,
-    datasets: [{
-      data: chartValues,
-      backgroundColor: chartColors,
-      borderRadius: 4,
-      borderSkipped: false
-    }]
-  },
-  options: {
-    indexAxis: 'y',
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-      legend: { display: false },
-      tooltip: {
-        callbacks: {
-          label: ctx => ' ' + ctx.parsed.x.toLocaleString('he-IL', {minimumFractionDigits:2}) + ' ₪'
-        }
-      }
-    },
-    scales: {
-      x: {
-        ticks: {
-          callback: v => v.toLocaleString('he-IL') + '₪'
-        },
-        grid: { color: '#f0f0f0' }
-      },
-      y: {
-        ticks: { font: { size: 11 } },
-        grid: { display: false }
-      }
-    }
-  }
-});
-
-// Card filter
-document.querySelectorAll('.fbtn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('.fbtn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    applyFilters();
-  });
-});
-
-function applyFilters() {
-  const activeCard = document.querySelector('.fbtn.active').dataset.card;
-  const search = document.getElementById('searchBox').value.toLowerCase();
-  document.querySelectorAll('#allTable tbody tr').forEach(row => {
-    const cardMatch = activeCard === 'all' || row.dataset.card === activeCard;
-    const merchant  = row.cells[1].textContent.toLowerCase();
-    const searchMatch = !search || merchant.includes(search);
-    row.style.display = (cardMatch && searchMatch) ? '' : 'none';
-  });
-}
-
-document.getElementById('searchBox').addEventListener('input', applyFilters);
-
-// ── Table sorting ────────────────────────────────────────────────────────────
-
-function parseCellValue(text) {
-  // Rank: #1, #2, ...
-  if (/^#[0-9]+$/.test(text)) return parseInt(text.slice(1));
-  // Date: DD/MM/YYYY
-  if (/^[0-9]{2}[/][0-9]{2}[/][0-9]{4}$/.test(text)) {
-    const [d, m, y] = text.split('/');
-    return parseInt(y + m + d);
-  }
-  // Number / currency: strip ₪ ‏‎+ , · spaces
-  const num = parseFloat(text.replace(/[₪,+ \t·\u200f\u200e]/g, ''));
-  if (!isNaN(num)) return num;
-  return text;
-}
-
-function makeTableSortable(tableId) {
-  const table = document.getElementById(tableId);
-  if (!table) return;
-  const ths = Array.from(table.querySelectorAll('thead th'));
-  let curCol = -1, curAsc = true;
-
-  ths.forEach((th, idx) => {
-    // Append sort-arrow indicator
-    const arrow = document.createElement('span');
-    arrow.style.cssText = 'margin-right:6px;font-size:.65rem;opacity:.3;vertical-align:middle;';
-    arrow.textContent = '⇅';
-    th.appendChild(arrow);
-    th.style.cursor = 'pointer';
-    th.style.userSelect = 'none';
-    th.title = 'לחץ למיון';
-
-    th.addEventListener('click', () => {
-      if (curCol === idx) curAsc = !curAsc;
-      else { curCol = idx; curAsc = true; }
-
-      // Update all arrows
-      ths.forEach((h, i) => {
-        const a = h.querySelector('span');
-        if (!a) return;
-        if (i === idx) {
-          a.textContent = curAsc ? ' ▲' : ' ▼';
-          a.style.opacity = '1';
-          a.style.color = '#4361EE';
-        } else {
-          a.textContent = '⇅';
-          a.style.opacity = '.3';
-          a.style.color = '';
-        }
-      });
-
-      const tbody = table.querySelector('tbody');
-      const rows = Array.from(tbody.querySelectorAll('tr'));
-
-      rows.sort((a, b) => {
-        const aVal = parseCellValue(a.cells[idx] ? a.cells[idx].textContent.trim() : '');
-        const bVal = parseCellValue(b.cells[idx] ? b.cells[idx].textContent.trim() : '');
-        if (typeof aVal === 'number' && typeof bVal === 'number') {
-          return curAsc ? aVal - bVal : bVal - aVal;
-        }
-        return curAsc
-          ? String(aVal).localeCompare(String(bVal), 'he')
-          : String(bVal).localeCompare(String(aVal), 'he');
-      });
-
-      // Re-insert rows preserving their display state (filter not reset)
-      rows.forEach(r => tbody.appendChild(r));
-    });
-  });
-}
-
-makeTableSortable('top10Table');
-makeTableSortable('allTable');
-"""
+    init_js = (
+        _MONTH_JS
+        .replace('%%SUFFIX%%', suffix)
+        .replace('%%LABELS%%', chart_labels)
+        .replace('%%VALUES%%', chart_values)
+        .replace('%%COLORS%%', chart_colors)
     )
 
-    # ── Assemble full HTML (f-string; CSS/JS braces must be doubled) ──
+    inner_html = f"""
+<div class="header">
+  <h1>דוח הוצאות — {month_he} {year}</h1>
+  <p>מופק {datetime.today().strftime('%d/%m/%Y')} &bull; {len(txns)} עסקאות &bull; {len(cards)} כרטיסים</p>
+</div>
+<div class="summary-row">
+{summary_html}
+</div>
+<div class="stats-bar">
+  <div class="stat"><div class="stat-n">{len(txns)}</div><div class="stat-l">סה"כ עסקאות</div></div>
+  <div class="stat"><div class="stat-n">{len(cat_order)}</div><div class="stat-l">קטגוריות</div></div>
+  <div class="stat"><div class="stat-n">{total_crd:,.0f}&#x20AA;</div><div class="stat-l">זיכויים</div></div>
+  <div class="stat"><div class="stat-n">{avg_chg:,.0f}&#x20AA;</div><div class="stat-l">ממוצע לעסקה</div></div>
+  <div class="stat"><div class="stat-n">{len(charges)}</div><div class="stat-l">עסקאות חיוב</div></div>
+</div>
+<div class="charts-grid">
+  <div class="chart-card">
+    <h2>התפלגות לפי קטגוריה</h2>
+    <div class="chart-wrap"><canvas id="pieChart_{suffix}"></canvas></div>
+  </div>
+  <div class="chart-card">
+    <h2>סכום לפי קטגוריה (&#x20AA;)</h2>
+    <div class="chart-wrap"><canvas id="barChart_{suffix}"></canvas></div>
+  </div>
+</div>
+<div class="section">
+  <h2>10 ההוצאות הגבוהות ביותר</h2>
+  <table id="top10Table_{suffix}">
+    <thead><tr>
+      <th></th><th>תאריך</th><th>בית עסק</th><th>קטגוריה</th><th>סכום</th><th>כרטיס</th>
+    </tr></thead>
+    <tbody>{top10_html}</tbody>
+  </table>
+</div>
+<div class="section">
+  <h2>כל העסקאות</h2>
+  <div class="toolbar">
+    {filter_btns}
+    <input id="searchBox_{suffix}" class="search-box" type="text" placeholder="&#x1F50D; חיפוש לפי שם עסק...">
+  </div>
+  <table id="allTable_{suffix}">
+    <thead><tr>
+      <th>תאריך</th><th>בית עסק</th><th>קטגוריה</th><th>סכום</th><th>כרטיס</th><th>סוג עסקה</th>
+    </tr></thead>
+    <tbody>{all_rows_html}</tbody>
+  </table>
+</div>
+"""
+    return inner_html, init_js
+
+
+def build_combined_html(months_data: list) -> str:
+    """months_data: list of (txns, month, year) sorted newest-first."""
+    tab_btns    = ''
+    panels_html = ''
+    all_init_js = ''
+    first_suffix = None
+
+    for i, (txns, month, year) in enumerate(months_data):
+        suffix   = f'{month:02d}_{year}'
+        month_he = MONTH_HE.get(month, str(month))
+        if i == 0:
+            first_suffix = suffix
+        active_tab   = ' active' if i == 0 else ''
+        active_panel = ' active' if i == 0 else ''
+        tab_btns += f'<button class="tab{active_tab}" data-suffix="{suffix}">{month_he} {year}</button>\n    '
+        inner, init_js = build_month_panel(txns, month, year, suffix)
+        panels_html += f'<div class="month-panel{active_panel}" id="panel_{suffix}">{inner}</div>\n'
+        all_init_js += init_js
+
+    first_call = f'initMonth_{first_suffix}();\n' if first_suffix else ''
+
     return f"""<!DOCTYPE html>
 <html lang="he" dir="rtl">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>דוח הוצאות — {month_he} {year}</title>
+<title>דוח הוצאות</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
 *, *::before, *::after {{ box-sizing: border-box; margin: 0; padding: 0; }}
 body {{ font-family: 'Segoe UI', Arial, sans-serif; background: #F0F2F5; color: #1a1a2e; direction: rtl; }}
 .page {{ max-width: 1200px; margin: 0 auto; padding: 24px 20px; }}
-
+/* Tabs */
+.tabs-bar {{ background: #fff; border-radius: 12px; padding: 10px 14px; margin-bottom: 20px;
+             box-shadow: 0 2px 8px rgba(0,0,0,.07); display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }}
+.tabs-bar span {{ font-size: .8rem; color: #aaa; font-weight: 500; margin-left: 6px; }}
+.tab {{ padding: 8px 20px; border-radius: 8px; border: none; background: transparent;
+        cursor: pointer; font-size: .9rem; font-family: inherit; color: #555; font-weight: 500; transition: all .15s; }}
+.tab:hover {{ background: #F0F2F5; color: #1a1a2e; }}
+.tab.active {{ background: #4361EE; color: #fff; font-weight: 600; }}
+/* Month panels */
+.month-panel {{ display: none; }}
+.month-panel.active {{ display: block; }}
 /* Header */
 .header {{ margin-bottom: 24px; }}
 .header h1 {{ font-size: 1.75rem; font-weight: 700; color: #1a1a2e; }}
 .header p  {{ color: #777; margin-top: 4px; font-size: .9rem; }}
-
 /* Summary cards */
 .summary-row {{ display: flex; gap: 16px; margin-bottom: 20px; flex-wrap: wrap; }}
 .scard {{ background: #fff; border-radius: 12px; padding: 20px; flex: 1; min-width: 150px;
@@ -525,7 +546,6 @@ body {{ font-family: 'Segoe UI', Arial, sans-serif; background: #F0F2F5; color: 
 .sc-label  {{ font-size: .78rem; color: #888; margin-bottom: 6px; font-weight: 500; text-transform: uppercase; letter-spacing: .4px; }}
 .sc-amount {{ font-size: 1.5rem; font-weight: 700; color: #1a1a2e; }}
 .sc-sub    {{ font-size: .75rem; color: #aaa; margin-top: 4px; }}
-
 /* Stats bar */
 .stats-bar {{ display: flex; gap: 0; background: #fff; border-radius: 12px;
               box-shadow: 0 2px 8px rgba(0,0,0,.07); margin-bottom: 20px; overflow: hidden; flex-wrap: wrap; }}
@@ -533,20 +553,16 @@ body {{ font-family: 'Segoe UI', Arial, sans-serif; background: #F0F2F5; color: 
 .stat:last-child {{ border-left: none; }}
 .stat-n    {{ font-size: 1.3rem; font-weight: 700; color: #4361EE; }}
 .stat-l    {{ font-size: .75rem; color: #888; margin-top: 2px; }}
-
 /* Charts */
 .charts-grid {{ display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }}
 @media (max-width: 700px) {{ .charts-grid {{ grid-template-columns: 1fr; }} }}
-.chart-card {{ background: #fff; border-radius: 12px; padding: 20px;
-               box-shadow: 0 2px 8px rgba(0,0,0,.07); }}
+.chart-card {{ background: #fff; border-radius: 12px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,.07); }}
 .chart-card h2 {{ font-size: .9rem; font-weight: 600; color: #555; margin-bottom: 14px; }}
 .chart-wrap {{ position: relative; height: 280px; }}
-
-/* Section cards */
+/* Sections */
 .section {{ background: #fff; border-radius: 12px; padding: 20px;
             box-shadow: 0 2px 8px rgba(0,0,0,.07); margin-bottom: 20px; }}
 .section h2 {{ font-size: .9rem; font-weight: 600; color: #555; margin-bottom: 16px; }}
-
 /* Tables */
 table {{ width: 100%; border-collapse: collapse; font-size: .875rem; }}
 th {{ background: #F8F9FB; padding: 10px 12px; font-weight: 600; color: #555;
@@ -554,12 +570,10 @@ th {{ background: #F8F9FB; padding: 10px 12px; font-weight: 600; color: #555;
 td {{ padding: 9px 12px; border-bottom: 1px solid #F2F4F7; vertical-align: middle; }}
 tr:last-child td {{ border-bottom: none; }}
 tbody tr:hover td {{ background: #FAFBFF; }}
-
 /* Toolbar */
 .toolbar {{ display: flex; gap: 8px; align-items: center; margin-bottom: 14px; flex-wrap: wrap; }}
 .fbtn {{ padding: 6px 14px; border-radius: 20px; border: 1px solid #ddd; background: #fff;
-         cursor: pointer; font-size: .82rem; font-family: inherit; color: #555;
-         transition: all .15s; }}
+         cursor: pointer; font-size: .82rem; font-family: inherit; color: #555; transition: all .15s; }}
 .fbtn:hover {{ border-color: #4361EE; color: #4361EE; }}
 .fbtn.active {{ background: #4361EE; color: #fff; border-color: #4361EE; font-weight: 600; }}
 .search-box {{ margin-right: auto; padding: 6px 14px; border: 1px solid #ddd;
@@ -570,62 +584,16 @@ tbody tr:hover td {{ background: #FAFBFF; }}
 </head>
 <body>
 <div class="page">
-
-<div class="header">
-  <h1>דוח הוצאות — {month_he} {year}</h1>
-  <p>מופק {datetime.today().strftime('%d/%m/%Y')} &bull; {len(txns)} עסקאות &bull; {len(cards)} כרטיסים</p>
+<div class="tabs-bar">
+  <span>חודש:</span>
+  {tab_btns}
 </div>
-
-<div class="summary-row">
-{summary_html}
+{panels_html}
 </div>
-
-<div class="stats-bar">
-  <div class="stat"><div class="stat-n">{len(txns)}</div><div class="stat-l">סה"כ עסקאות</div></div>
-  <div class="stat"><div class="stat-n">{len(cat_order)}</div><div class="stat-l">קטגוריות</div></div>
-  <div class="stat"><div class="stat-n">{total_crd:,.0f}&#x20AA;</div><div class="stat-l">זיכויים</div></div>
-  <div class="stat"><div class="stat-n">{avg_chg:,.0f}&#x20AA;</div><div class="stat-l">ממוצע לעסקה</div></div>
-  <div class="stat"><div class="stat-n">{len(charges)}</div><div class="stat-l">עסקאות חיוב</div></div>
-</div>
-
-<div class="charts-grid">
-  <div class="chart-card">
-    <h2>התפלגות לפי קטגוריה</h2>
-    <div class="chart-wrap"><canvas id="pieChart"></canvas></div>
-  </div>
-  <div class="chart-card">
-    <h2>סכום לפי קטגוריה (&#x20AA;)</h2>
-    <div class="chart-wrap"><canvas id="barChart"></canvas></div>
-  </div>
-</div>
-
-<div class="section">
-  <h2>10 ההוצאות הגבוהות ביותר</h2>
-  <table id="top10Table">
-    <thead><tr>
-      <th></th><th>תאריך</th><th>בית עסק</th><th>קטגוריה</th><th>סכום</th><th>כרטיס</th>
-    </tr></thead>
-    <tbody>{top10_html}</tbody>
-  </table>
-</div>
-
-<div class="section">
-  <h2>כל העסקאות</h2>
-  <div class="toolbar">
-    {filter_btns}
-    <input id="searchBox" class="search-box" type="text" placeholder="&#x1F50D; חיפוש לפי שם עסק...">
-  </div>
-  <table id="allTable">
-    <thead><tr>
-      <th>תאריך</th><th>בית עסק</th><th>קטגוריה</th><th>סכום</th><th>כרטיס</th><th>סוג עסקה</th>
-    </tr></thead>
-    <tbody>{all_rows_html}</tbody>
-  </table>
-</div>
-
-</div><!-- .page -->
 <script>
-{js_block}
+{all_init_js}
+{_SHARED_JS}
+{first_call}
 </script>
 </body>
 </html>"""
@@ -638,38 +606,35 @@ def main():
     files = discover_files(cli_args)
 
     if not files:
-        print('No unprocessed .xlsx files found.')
-        print('(Files matching MM_YYYY_NNNN.xlsx are skipped as already processed.)')
+        print('No .xlsx files found.')
         return
 
-    all_txns = []
-    period_month, period_year = None, None
-
+    # Group transactions by (year, month)
+    months: dict = defaultdict(list)
     for f in files:
-        txns, new_path, f_month, f_year = process_file(f)
-        all_txns.extend(txns)
-        # Use billing period from the first file that has data
-        if period_month is None and f_month:
-            period_month, period_year = f_month, f_year
+        txns, _, f_month, f_year = process_file(f)
+        if txns and f_month and f_year:
+            months[(f_year, f_month)].extend(txns)
 
-    if not all_txns:
+    if not months:
         print('No transactions found in any file.')
         return
 
-    # Fallback period
-    if period_month is None:
-        period_month, period_year = all_txns[0]['date'].month, all_txns[0]['date'].year
+    # Sort newest-first
+    months_data = [
+        (txns, month, year)
+        for (year, month), txns in sorted(months.items(), reverse=True)
+    ]
 
-    html = build_html(all_txns, period_month, period_year)
-    out_file = f'dashboard_{period_month:02d}_{period_year}.html'
-
-    with open(out_file, 'w', encoding='utf-8') as fh:
+    html = build_combined_html(months_data)
+    with open('dashboard.html', 'w', encoding='utf-8') as fh:
         fh.write(html)
 
-    print(f'\n✓ Dashboard saved: {out_file}')
-    print(f'  Total transactions : {len(all_txns)}')
-    print(f'  Charges            : {sum(1 for t in all_txns if t["charge"] > 0)}')
-    print(f'  Credits            : {sum(1 for t in all_txns if t["charge"] < 0)}')
+    print(f'\n✓ Dashboard saved: dashboard.html  ({len(months_data)} month(s))')
+    for txns, month, year in months_data:
+        charges = sum(1 for t in txns if t['charge'] > 0)
+        credits = sum(1 for t in txns if t['charge'] < 0)
+        print(f'  {MONTH_HE.get(month, month)} {year}: {len(txns)} עסקאות ({charges} חיובים, {credits} זיכויים)')
 
 
 if __name__ == '__main__':
