@@ -288,6 +288,7 @@ function initMonth_%%SUFFIX%%() {
   document.getElementById('searchBox_%%SUFFIX%%').addEventListener('input', applyFilters_%%SUFFIX%%);
   makeTableSortable('top10Table_%%SUFFIX%%');
   makeTableSortable('allTable_%%SUFFIX%%');
+  makeTableSortable('catDetailTable_%%SUFFIX%%');
 }
 """
 
