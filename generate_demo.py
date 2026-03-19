@@ -201,6 +201,16 @@ def main():
         months_data.append((txns, month, year))
 
     html = build_combined_html(months_data)
+
+    # Inject demo banner into the page (not part of bank_dashboard.py)
+    demo_banner = (
+        '<div style="background:#FFB703;color:#1a1a2e;text-align:center;'
+        'padding:10px 16px;font-size:.88rem;font-weight:600;letter-spacing:.3px;">'
+        '⚠ זהו דשבורד הדגמה עם נתונים מדומים בלבד — לא נתונים אמיתיים'
+        '</div>'
+    )
+    html = html.replace('<div class="page">', demo_banner + '\n<div class="page">', 1)
+
     out_path = os.path.join(docs_dir, 'index.html')
     with open(out_path, 'w', encoding='utf-8') as fh:
         fh.write(html)
