@@ -367,6 +367,13 @@ def ils_cell(amount: float) -> str:
     return f'<span style="color:#dc2626;font-weight:600">{amount:,.2f}&#x20AA;</span>'
 
 
+def mtotal_cell(amount: float) -> str:
+    """Muted merchant-total cell — visually distinct from per-transaction ils_cell."""
+    if amount < 0:
+        return f'<span style="color:#16a34a;font-size:.82rem">{abs(amount):,.2f}&#x20AA;</span>'
+    return f'<span style="color:#64748b;font-size:.82rem">{amount:,.2f}&#x20AA;</span>'
+
+
 def fdate(d: datetime) -> str:
     return d.strftime('%d/%m/%Y')
 
@@ -389,6 +396,10 @@ def build_month_panel(txns: list, month: int, year: int, suffix: str) -> tuple:
 
     top10      = sorted(charges, key=lambda x: -x['charge'])[:10]
     all_sorted = sorted(txns, key=lambda x: -x['date'].timestamp())
+
+    merchant_totals = defaultdict(float)
+    for t in txns:
+        merchant_totals[t['merchant']] += t['charge']
 
     month_he   = MONTH_HE.get(month, str(month))
 
@@ -425,6 +436,7 @@ def build_month_panel(txns: list, month: int, year: int, suffix: str) -> tuple:
             f'<td style="font-weight:500">{"🌍 " if t["foreign"] else ""}{t["merchant"]}</td>'
             f'<td>{badge(t["category"], cat_order)}</td>'
             f'<td style="text-align:left">{ils_cell(t["charge"])}</td>'
+            f'<td style="text-align:left">{mtotal_cell(merchant_totals[t["merchant"]])}</td>'
             f'<td style="font-family:monospace;color:#888;font-size:.8rem">···· {t["card"]}</td>'
             f'</tr>'
         )
@@ -443,6 +455,7 @@ def build_month_panel(txns: list, month: int, year: int, suffix: str) -> tuple:
             f'<td style="font-weight:500">{"🌍 " if t["foreign"] else ""}{t["merchant"]}</td>'
             f'<td>{badge(t["category"], cat_order)}</td>'
             f'<td style="text-align:left">{ils_cell(t["charge"])}</td>'
+            f'<td style="text-align:left">{mtotal_cell(merchant_totals[t["merchant"]])}</td>'
             f'<td style="font-family:monospace;color:#888;font-size:.8rem">···· {t["card"]}</td>'
             f'</tr>'
         )
@@ -492,7 +505,7 @@ def build_month_panel(txns: list, month: int, year: int, suffix: str) -> tuple:
   </div>
   <table id="catDetailTable_{suffix}">
     <thead><tr>
-      <th>תאריך</th><th>בית עסק</th><th>קטגוריה</th><th>סכום</th><th>כרטיס</th>
+      <th>תאריך</th><th>בית עסק</th><th>קטגוריה</th><th>סכום</th><th>סה"כ בבית עסק</th><th>כרטיס</th>
     </tr></thead>
     <tbody></tbody>
   </table>
@@ -501,7 +514,7 @@ def build_month_panel(txns: list, month: int, year: int, suffix: str) -> tuple:
   <h2>10 ההוצאות הגבוהות ביותר</h2>
   <table id="top10Table_{suffix}">
     <thead><tr>
-      <th></th><th>תאריך</th><th>בית עסק</th><th>קטגוריה</th><th>סכום</th><th>כרטיס</th>
+      <th></th><th>תאריך</th><th>בית עסק</th><th>קטגוריה</th><th>סכום</th><th>סה"כ בבית עסק</th><th>כרטיס</th>
     </tr></thead>
     <tbody>{top10_html}</tbody>
   </table>
@@ -514,7 +527,7 @@ def build_month_panel(txns: list, month: int, year: int, suffix: str) -> tuple:
   </div>
   <table id="allTable_{suffix}">
     <thead><tr>
-      <th>תאריך</th><th>בית עסק</th><th>קטגוריה</th><th>סכום</th><th>כרטיס</th>
+      <th>תאריך</th><th>בית עסק</th><th>קטגוריה</th><th>סכום</th><th>סה"כ בבית עסק</th><th>כרטיס</th>
     </tr></thead>
     <tbody>{all_rows_html}</tbody>
   </table>
