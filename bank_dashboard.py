@@ -210,8 +210,8 @@ def process_file(path: str) -> tuple:
 def discover_files(cli_args: list) -> list:
     if cli_args:
         return cli_args
-    # Include all xlsx files — new and previously renamed
-    return _glob.glob('*.xlsx')
+    # Include all xlsx files in data/ — new exports and previously renamed
+    return _glob.glob('data/*.xlsx')
 
 
 # ── HTML generation ───────────────────────────────────────────────────────────

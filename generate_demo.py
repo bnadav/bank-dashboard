@@ -186,12 +186,14 @@ def parse_demo_file(path: str) -> list:
 def main():
     script_dir = os.path.dirname(os.path.abspath(__file__))
     docs_dir = os.path.join(script_dir, 'docs')
+    demo_data_dir = os.path.join(script_dir, 'data_demo')
     os.makedirs(docs_dir, exist_ok=True)
+    os.makedirs(demo_data_dir, exist_ok=True)
 
     months_data = []
     for month, year in sorted(MONTHS, reverse=True):  # newest-first for tabs
         fname = f'demo_{month:02d}_{year}.xlsx'
-        fpath = os.path.join(script_dir, fname)
+        fpath = os.path.join(demo_data_dir, fname)
         print(f'Generating {fname}...')
         make_xlsx(fpath, month, year)
         txns = parse_demo_file(fpath)

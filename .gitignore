@@ -1,6 +1,5 @@
-# Excel data files (sensitive — real bank exports)
-*.xlsx
-!demo_*.xlsx
+# Real bank data (sensitive — never commit)
+data/
 
 # Generated HTML dashboards (sensitive output)
 dashboard*.html

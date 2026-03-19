@@ -14,11 +14,11 @@ Each month, Bank Hapoalim provides one Excel file containing **both credit cards
 ## Running
 
 ```bash
-# Drop new Excel files in this folder, then:
+# Drop new Excel files in data/, then:
 python bank_dashboard.py
 
 # Or pass files explicitly (works on already-renamed files too):
-python bank_dashboard.py 02_2026_6138.xlsx 02_2026_8689.xlsx
+python bank_dashboard.py data/02_2026_6138.xlsx data/02_2026_8689.xlsx
 ```
 
 **Dependency:** `pip install openpyxl`
@@ -35,14 +35,22 @@ python generate_demo.py
 ```
 
 This creates:
-- `demo_01_2026.xlsx`, `demo_02_2026.xlsx`, `demo_03_2026.xlsx` — fake bank exports covering all categories
+- `data_demo/demo_01_2026.xlsx`, `data_demo/demo_02_2026.xlsx`, `data_demo/demo_03_2026.xlsx` — fake bank exports covering all categories
 - `docs/index.html` — the self-contained dashboard (committed to repo, served by GitHub Pages)
 
 GitHub Pages is configured to serve from the `master` branch `/docs` folder. After pushing, the site updates automatically — no CI needed.
 
+## Folder structure
+
+| Folder | Contents | Git |
+|---|---|---|
+| `data/` | Real bank xlsx exports (sensitive) | gitignored |
+| `data_demo/` | Fake demo xlsx files | committed |
+| `docs/` | Generated GitHub Pages dashboard | committed |
+
 ## File naming convention
 
-- Raw exports from the bank: any `.xlsx` name (auto-discovered)
+- Raw exports from the bank: drop any `.xlsx` into `data/` (auto-discovered)
 - After processing: `MM_YYYY.xlsx` — e.g. `03_2026.xlsx` (new format: both cards in one file)
 - Legacy single-card files: `MM_YYYY_CARD.xlsx` — e.g. `02_2026_6138.xlsx` (old format)
 - Files already matching `MM_YYYY.xlsx` or `MM_YYYY_NNNN.xlsx` are skipped during auto-discovery (but can be passed explicitly)
