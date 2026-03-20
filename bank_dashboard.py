@@ -230,7 +230,7 @@ function initMonth_%%SUFFIX%%() {
     options: {
       responsive: true, maintainAspectRatio: false,
       plugins: {
-        legend: { position: 'right', rtl: true, labels: { boxWidth: 12, padding: 10, font: { size: 11 } } },
+        legend: { position: window.innerWidth < 700 ? 'bottom' : 'right', rtl: true, labels: { boxWidth: 12, padding: 10, font: { size: 11 } } },
         tooltip: { callbacks: { label: ctx => ' ' + ctx.label + ': ' + ctx.parsed.toLocaleString('he-IL', {minimumFractionDigits:2}) + ' \u20aa' } }
       }
     }
@@ -503,21 +503,21 @@ def build_month_panel(txns: list, month: int, year: int, suffix: str) -> tuple:
     <button onclick="var p=document.getElementById('catDetail_{suffix}');p.style.display='none';p.dataset.cat='';"
             style="border:none;background:none;font-size:1.2rem;cursor:pointer;color:#aaa;padding:4px 8px;line-height:1">✕</button>
   </div>
-  <table id="catDetailTable_{suffix}">
+  <div class="table-wrap"><table id="catDetailTable_{suffix}">
     <thead><tr>
       <th>תאריך</th><th>בית עסק</th><th>קטגוריה</th><th>סכום</th><th>סה"כ בבית עסק</th><th>כרטיס</th>
     </tr></thead>
     <tbody></tbody>
-  </table>
+  </table></div>
 </div>
 <div class="section">
   <h2>10 ההוצאות הגבוהות ביותר</h2>
-  <table id="top10Table_{suffix}">
+  <div class="table-wrap"><table id="top10Table_{suffix}">
     <thead><tr>
       <th></th><th>תאריך</th><th>בית עסק</th><th>קטגוריה</th><th>סכום</th><th>סה"כ בבית עסק</th><th>כרטיס</th>
     </tr></thead>
     <tbody>{top10_html}</tbody>
-  </table>
+  </table></div>
 </div>
 <div class="section">
   <h2>כל העסקאות</h2>
@@ -525,12 +525,12 @@ def build_month_panel(txns: list, month: int, year: int, suffix: str) -> tuple:
     {filter_btns}
     <input id="searchBox_{suffix}" class="search-box" type="text" placeholder="&#x1F50D; חיפוש לפי שם עסק...">
   </div>
-  <table id="allTable_{suffix}">
+  <div class="table-wrap"><table id="allTable_{suffix}">
     <thead><tr>
       <th>תאריך</th><th>בית עסק</th><th>קטגוריה</th><th>סכום</th><th>סה"כ בבית עסק</th><th>כרטיס</th>
     </tr></thead>
     <tbody>{all_rows_html}</tbody>
-  </table>
+  </table></div>
 </div>
 """
     return inner_html, init_js
@@ -625,6 +625,26 @@ tbody tr:hover td {{ background: #FAFBFF; }}
                border-radius: 20px; font-size: .82rem; font-family: inherit;
                outline: none; min-width: 200px; color: #333; }}
 .search-box:focus {{ border-color: #4361EE; box-shadow: 0 0 0 3px #4361EE18; }}
+/* Responsive table wrapper */
+.table-wrap {{ overflow-x: auto; -webkit-overflow-scrolling: touch; }}
+/* Mobile */
+@media (max-width: 600px) {{
+  .page {{ padding: 12px 10px; }}
+  .header h1 {{ font-size: 1.3rem; }}
+  .header p {{ font-size: .8rem; }}
+  .scard {{ min-width: 120px; padding: 14px; }}
+  .sc-amount {{ font-size: 1.2rem; }}
+  .sc-sub {{ font-size: .7rem; }}
+  .stat {{ min-width: 70px; padding: 12px 8px; }}
+  .stat-n {{ font-size: 1.1rem; }}
+  .chart-wrap {{ height: 240px; }}
+  .chart-card {{ padding: 14px; }}
+  .section {{ padding: 14px; }}
+  th, td {{ padding: 7px 8px; font-size: .8rem; }}
+  .search-box {{ min-width: 0; width: 100%; margin-right: 0; }}
+  .toolbar {{ flex-direction: column; align-items: stretch; }}
+  .toolbar .fbtn {{ text-align: center; }}
+}}
 </style>
 </head>
 <body>
