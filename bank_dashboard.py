@@ -230,7 +230,7 @@ function initMonth_%%SUFFIX%%() {
     options: {
       responsive: true, maintainAspectRatio: false,
       plugins: {
-        legend: { position: window.innerWidth < 700 ? 'bottom' : 'right', rtl: true, labels: { boxWidth: 12, padding: 10, font: { size: 11 } } },
+        legend: { position: window.matchMedia('(max-width:699px)').matches ? 'bottom' : 'right', rtl: true, labels: { boxWidth: 12, padding: 10, font: { size: 11 } } },
         tooltip: { callbacks: { label: ctx => ' ' + ctx.label + ': ' + ctx.parsed.toLocaleString('he-IL', {minimumFractionDigits:2}) + ' \u20aa' } }
       }
     }
