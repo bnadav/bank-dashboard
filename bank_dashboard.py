@@ -315,7 +315,7 @@ function initMonth_%%SUFFIX%%() {
     });
   }
   document.getElementById('searchBox_%%SUFFIX%%').addEventListener('input', applyFilters_%%SUFFIX%%);
-  makeTableSortable('top10Table_%%SUFFIX%%');
+  makeTableSortable('top20Table_%%SUFFIX%%');
   makeTableSortable('allTable_%%SUFFIX%%');
   makeTableSortable('catDetailTable_%%SUFFIX%%');
 }
@@ -353,14 +353,16 @@ function makeTableSortable(tableId) {
         else           { a.textContent = '\u21c5'; a.style.opacity='.3'; a.style.color=''; }
       });
       var tbody = table.querySelector('tbody');
-      var rows = Array.from(tbody.querySelectorAll('tr'));
+      var rows = Array.from(tbody.querySelectorAll('tr:not(.subtotal-row)'));
       rows.sort(function(a, b) {
         var av = parseCellValue(a.cells[idx] ? a.cells[idx].textContent.trim() : '');
         var bv = parseCellValue(b.cells[idx] ? b.cells[idx].textContent.trim() : '');
         if (typeof av === 'number' && typeof bv === 'number') return curAsc ? av-bv : bv-av;
         return curAsc ? String(av).localeCompare(String(bv),'he') : String(bv).localeCompare(String(av),'he');
       });
+      var subtotals = Array.from(tbody.querySelectorAll('tr.subtotal-row'));
       rows.forEach(function(r) { tbody.appendChild(r); });
+      subtotals.forEach(function(r) { tbody.appendChild(r); });
     });
   });
 }
@@ -423,7 +425,7 @@ def build_month_panel(txns: list, month: int, year: int, suffix: str) -> tuple:
         cat_agg[t['category']] += t['charge']
     cat_order  = sorted(cat_agg.items(), key=lambda x: -x[1])
 
-    top10      = sorted(charges, key=lambda x: -x['charge'])[:10]
+    top20      = sorted(charges, key=lambda x: -x['charge'])[:20]
     all_sorted = sorted(txns, key=lambda x: -x['date'].timestamp())
 
     merchant_totals = defaultdict(float)
@@ -455,10 +457,13 @@ def build_month_panel(txns: list, month: int, year: int, suffix: str) -> tuple:
             f'</div>'
         )
 
-    # ── Top 10 rows ──
-    top10_html = ''
-    for i, t in enumerate(top10, 1):
-        top10_html += (
+    # ── Top 20 rows with subtotals at 10, 15, 20 ──
+    top_html = ''
+    subtotal_breaks = [10, 15, 20]
+    running_sum = 0.0
+    for i, t in enumerate(top20, 1):
+        running_sum += t['charge']
+        top_html += (
             f'<tr>'
             f'<td style="font-weight:700;color:#4361EE;width:36px">#{i}</td>'
             f'<td style="white-space:nowrap">{fdate(t["date"])}</td>'
@@ -469,6 +474,16 @@ def build_month_panel(txns: list, month: int, year: int, suffix: str) -> tuple:
             f'<td style="font-family:monospace;color:#888;font-size:.8rem">···· {t["card"]}</td>'
             f'</tr>'
         )
+        if i in subtotal_breaks or i == len(top20):
+            pct = running_sum / total_chg * 100 if total_chg else 0
+            label = f'סה"כ טופ {i}'
+            top_html += (
+                f'<tr class="subtotal-row">'
+                f'<td colspan="4" style="text-align:right;font-weight:700">{label}</td>'
+                f'<td style="text-align:left;font-weight:700">{running_sum:,.2f}&#x20AA;</td>'
+                f'<td colspan="2" style="color:#64748b;font-size:.85rem">{pct:.1f}% מסך ההוצאות</td>'
+                f'</tr>'
+            )
 
     # ── Filter buttons ──
     filter_btns = '<button class="fbtn active" data-card="all">הכל</button>'
@@ -540,12 +555,12 @@ def build_month_panel(txns: list, month: int, year: int, suffix: str) -> tuple:
   </table></div>
 </div>
 <div class="section">
-  <h2>10 ההוצאות הגבוהות ביותר</h2>
-  <div class="table-wrap"><table id="top10Table_{suffix}">
+  <h2>20 ההוצאות הגבוהות ביותר</h2>
+  <div class="table-wrap"><table id="top20Table_{suffix}">
     <thead><tr>
       <th></th><th>תאריך</th><th>בית עסק</th><th>קטגוריה</th><th>סכום</th><th>סה"כ בבית עסק</th><th>כרטיס</th>
     </tr></thead>
-    <tbody>{top10_html}</tbody>
+    <tbody>{top_html}</tbody>
   </table></div>
 </div>
 <div class="section">
@@ -644,6 +659,7 @@ th {{ background: #F8F9FB; padding: 10px 12px; font-weight: 600; color: #555;
 td {{ padding: 9px 12px; border-bottom: 1px solid #F2F4F7; vertical-align: middle; }}
 tr:last-child td {{ border-bottom: none; }}
 tbody tr:hover td {{ background: #FAFBFF; }}
+.subtotal-row td {{ background: #f0f4ff !important; border-top: 2px solid #4361EE; border-bottom: 2px solid #4361EE; }}
 /* Toolbar */
 .toolbar {{ display: flex; gap: 8px; align-items: center; margin-bottom: 14px; flex-wrap: wrap; }}
 .fbtn {{ padding: 6px 14px; border-radius: 20px; border: 1px solid #ddd; background: #fff;
