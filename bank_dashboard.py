@@ -96,17 +96,43 @@ def safe_float(v) -> float:
         return 0.0
 
 
+def _find_col(header_row, name):
+    """Return the 0-based index of `name` in `header_row`, or -1."""
+    for i, cell in enumerate(header_row):
+        if cell and str(cell).strip() == name:
+            return i
+    return -1
+
+
 def parse_section(rows: list, start: int, card: str, section: str) -> list:
     """
     Parse transactions starting at `start` (the anchor row).
     Skips +3 rows (anchor + account-header + column-header) then reads
     data rows until col A is None.
 
-    Local  columns: [0]=card [1]=bill_dt [2]=txn_dt [3]=merchant [4]=purchase [5]=charge [12]=type
-    Foreign columns: [0]=card [1]=bill_dt [2]=txn_dt [3]=merchant [4]=charge [5]=purchase [6]=currency [13]=type
+    Column positions are detected from the header row to handle varying layouts.
     """
     txns = []
+    header_row = rows[start + 2]
     data_start = start + 3
+
+    # Detect column positions from header
+    charge_col = _find_col(header_row, "סכום חיוב בש''ח")
+    purchase_col = _find_col(header_row, 'סכום קנייה')
+    type_col = _find_col(header_row, 'תאור סוג עסקת אשראי')
+    currency_col = _find_col(header_row, 'מטבע מקורי') if section == 'foreign' else -1
+
+    # Fallback to hardcoded positions if header detection fails
+    if charge_col == -1 or purchase_col == -1:
+        if section == 'local':
+            charge_col, purchase_col = 5, 4
+        else:
+            charge_col, purchase_col = 4, 5
+    if type_col == -1:
+        type_col = 12 if section == 'local' else 13
+    if section == 'foreign' and currency_col == -1:
+        currency_col = 6
+
     for row in rows[data_start:]:
         if row[0] is None:
             break
@@ -116,16 +142,13 @@ def parse_section(rows: list, start: int, card: str, section: str) -> list:
         try:
             txn_dt  = row[2]
             merchant = str(row[3] or '').strip()
+            charge = safe_float(row[charge_col])
+            purchase = safe_float(row[purchase_col])
             if section == 'local':
-                charge = safe_float(row[5])
-                purchase = safe_float(row[4])
                 currency = 'ILS'
-                txn_type = str(row[12] or '').strip()
             else:
-                charge = safe_float(row[4])
-                purchase = safe_float(row[5])
-                currency = str(row[6] or 'USD').strip()
-                txn_type = str(row[13] or '').strip()
+                currency = str(row[currency_col] or 'USD').strip()
+            txn_type = str(row[type_col] or '').strip()
             if not isinstance(txn_dt, datetime):
                 continue
             txns.append({
@@ -186,9 +209,15 @@ def process_file(path: str) -> tuple:
 
     cards_found = sorted(set(t['card'] for t in txns))
 
-    # Rename: multi-card file → MM_YYYY.xlsx; single-card file → MM_YYYY_CARD.xlsx
+    # Rename: only rename files that don't already match MM_YYYY.xlsx / MM_YYYY_CARD.xlsx
     new_path = path
-    if month and year:
+    basename = os.path.basename(path)
+    already_named = RENAMED_RE.match(basename)
+    if already_named:
+        # Trust the filename for month/year — it was set by a previous run or the user
+        month = int(basename[:2])
+        year  = int(basename[3:7])
+    if month and year and not already_named:
         if len(cards_found) > 1:
             new_name = f'{month:02d}_{year}.xlsx'
         else:
